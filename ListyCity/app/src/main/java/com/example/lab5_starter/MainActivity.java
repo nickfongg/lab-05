@@ -13,6 +13,10 @@ import androidx.core.view.WindowInsetsCompat;
 
 import java.util.ArrayList;
 
+
+import com.google.firebase.firestore.CollectionReference;
+import com.google.firebase.firestore.FirebaseFirestore;
+
 public class MainActivity extends AppCompatActivity implements CityDialogFragment.CityDialogListener {
 
     private Button addCityButton;
@@ -20,6 +24,9 @@ public class MainActivity extends AppCompatActivity implements CityDialogFragmen
 
     private ArrayList<City> cityArrayList;
     private ArrayAdapter<City> cityArrayAdapter;
+
+    private FirebaseFirestore db;
+    private CollectionReference citiesRef;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,7 +48,33 @@ public class MainActivity extends AppCompatActivity implements CityDialogFragmen
         cityArrayAdapter = new CityArrayAdapter(this, cityArrayList);
         cityListView.setAdapter(cityArrayAdapter);
 
-        addDummyData();
+        db = FirebaseFirestore.getInstance();
+        citiesRef = db.collection("cities");
+        citiesRef.addSnapshotListener((value, error) -> {
+            if (error != null) {
+                return;
+            }
+
+            cityArrayList.clear();
+
+            if (value == null) {
+                cityArrayAdapter.notifyDataSetChanged();
+                return;
+            }
+
+            for (com.google.firebase.firestore.QueryDocumentSnapshot doc : value) {
+                String name = doc.getString("name");
+                String province = doc.getString("province");
+
+                if (name != null && province != null) {
+                    cityArrayList.add(new City(name, province));
+                }
+            }
+
+            cityArrayAdapter.notifyDataSetChanged();
+        });
+        // ✅ Step 1: REMOVE hard-coded starter data
+        // addDummyData();
 
         // set listeners
         addCityButton.setOnClickListener(view -> {
@@ -53,6 +86,13 @@ public class MainActivity extends AppCompatActivity implements CityDialogFragmen
             City city = cityArrayAdapter.getItem(i);
             CityDialogFragment cityDialogFragment = CityDialogFragment.newInstance(city);
             cityDialogFragment.show(getSupportFragmentManager(),"City Details");
+        });
+        cityListView.setOnItemLongClickListener((parent, view, position, id) -> {
+            City selectedCity = cityArrayAdapter.getItem(position);
+            if (selectedCity != null) {
+                deleteCity(selectedCity);
+            }
+            return true;
         });
 
     }
@@ -67,12 +107,24 @@ public class MainActivity extends AppCompatActivity implements CityDialogFragmen
     }
 
     @Override
-    public void addCity(City city){
-        cityArrayList.add(city);
-        cityArrayAdapter.notifyDataSetChanged();
+    public void addCity(City city) {
+        java.util.HashMap<String, Object> data = new java.util.HashMap<>();
+        data.put("name", city.getCityName());
+        data.put("province", city.getProvince());
 
+        citiesRef
+                .document(city.getCityName())
+                .set(data);
+    }
+    public void deleteCity(City city) {
+        citiesRef
+                .document(city.getCityName())
+                .delete();
     }
 
+
+    // You can keep this method for now (unused after Step 1),
+    // or delete it later once Firestore is working.
     public void addDummyData(){
         City m1 = new City("Edmonton", "AB");
         City m2 = new City("Vancouver", "BC");
